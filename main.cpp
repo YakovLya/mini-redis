@@ -19,6 +19,7 @@
 const int PORT = 4242;
 const int BUFFER_SIZE = 4096;
 const int IDLE_CLIENT_TTL = 60; // TTL for idle client's (in seconds)
+const int ACTIVE_CLEAN_PER_LOOP = 20; // How many values tries to clean each timeout
 
 struct ClientBuffer{
     std::deque<char> buffer;
@@ -80,10 +81,11 @@ public:
 
     void run() {
         std::unordered_map<int, ClientBuffer> client_buffers;
+        std::unordered_map<std::string, Value>::iterator current_expires_it = storage_.begin();
 
         while (true) {
             struct epoll_event events[64];
-            int n = epoll_wait(epoll_fd, events, 64, 1000);
+            int n = epoll_wait(epoll_fd, events, 64, 100);
 
             for (int i = 0; i < n; ++i) {
                 if (events[i].data.fd == server_fd) {
@@ -167,6 +169,25 @@ public:
                     ++ it;
                 }
             }
+
+            if (!storage_.empty()) {
+                int checked = 0;
+                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                            (std::chrono::steady_clock::now().time_since_epoch()).count();
+
+                if (current_expires_it == storage_.end())
+                    current_expires_it = storage_.begin();
+                
+                while (current_expires_it != storage_.end() && checked < ACTIVE_CLEAN_PER_LOOP) {
+                    if (current_expires_it->second.expires_at != -1 && current_expires_it->second.expires_at <= ms) {
+                        current_expires_it = storage_.erase(current_expires_it);
+                        std::cout << "CLEANED\n";
+                    } else {
+                        ++ current_expires_it;
+                    }
+                    ++ checked;
+                }
+            }
         }
     }
 
@@ -204,7 +225,7 @@ public:
             if (tokens.size() < 2)
                 return "error: missing args, must be GET [key]\n";
             if (storage_.count(tokens[1])) {
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
                             (std::chrono::steady_clock::now().time_since_epoch()).count();
 
                 if (storage_[tokens[1]].expires_at != -1 && storage_[tokens[1]].expires_at <= ms) {
@@ -229,7 +250,7 @@ public:
             if (tokens.size() < 2)
                 return "error: missing args, must be EXISTS [key]\n";
             if (storage_.count(tokens[1])) {
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
                             (std::chrono::steady_clock::now().time_since_epoch()).count();
 
                 if (storage_[tokens[1]].expires_at != -1 && storage_[tokens[1]].expires_at <= ms) {
@@ -243,7 +264,7 @@ public:
         }
 
         if (command == "HELP") {
-            return "Supported commands:\nHELP - return this message\nSET [key] [value...] - set value for key\nGET [key] - returns value for [key] if found, -1 otherwise\nDEL [key] - erase value for [key]\nEXISTS [key] - returns 1 if [key] exists, 0 otherwise\n";
+            return "Supported commands:\nHELP - return this message\nSET [key] [value...] - set value for key\nGET [key] - returns value for [key] if found, -1 otherwise\nDEL [key] - erase value for [key]\nEXISTS [key] - returns 1 if [key] exists, 0 otherwise\nEXPIRES [key] [ttl] - set value's ttl for [key] (in seconds)\n";
         }
 
         if (command == "EXPIRES") {
@@ -257,7 +278,7 @@ public:
                     return "error: invalid ttl";
                 }
 
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
                                 (std::chrono::steady_clock::now().time_since_epoch()).count();
                 storage_[tokens[1]].expires_at = ms + seconds * 1000;
                 return "OK\n";
@@ -266,7 +287,7 @@ public:
             return "error: key not found\n";
         }
 
-        return "error: query must be one of SET, GET, DEL, HELP, EXISTS\n";
+        return "error: query must be one of SET, GET, DEL, HELP, EXISTS, EXPIRES\n";
     }
 
     ~Server() {
