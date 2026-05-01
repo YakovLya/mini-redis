@@ -1,6 +1,7 @@
+#include "storage/storage.hpp"
+
 #include <cctype>
 #include <chrono>
-#include <cstdint>
 #include <deque>
 #include <exception>
 #include <iostream>
@@ -8,12 +9,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
-#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
-#include <unordered_map>
 #include <vector>
 
 const int PORT = 4242;
@@ -26,16 +25,11 @@ struct ClientBuffer{
     std::chrono::steady_clock::time_point last_activity;
 };
 
-struct Value{
-    std::string value;
-    int64_t expires_at = -1;
-};
-
 class Server {
 private:
     int server_fd = -1;
     int epoll_fd = -1;
-    std::unordered_map<std::string, Value> storage_;
+    Storage storage_;
 
 public:
 
@@ -81,7 +75,6 @@ public:
 
     void run() {
         std::unordered_map<int, ClientBuffer> client_buffers;
-        std::unordered_map<std::string, Value>::iterator current_expires_it = storage_.begin();
 
         while (true) {
             struct epoll_event events[64];
@@ -170,24 +163,7 @@ public:
                 }
             }
 
-            if (!storage_.empty()) {
-                int checked = 0;
-                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
-                            (std::chrono::steady_clock::now().time_since_epoch()).count();
-
-                if (current_expires_it == storage_.end())
-                    current_expires_it = storage_.begin();
-                
-                while (current_expires_it != storage_.end() && checked < ACTIVE_CLEAN_PER_LOOP) {
-                    if (current_expires_it->second.expires_at != -1 && current_expires_it->second.expires_at <= ms) {
-                        current_expires_it = storage_.erase(current_expires_it);
-                        std::cout << "CLEANED\n";
-                    } else {
-                        ++ current_expires_it;
-                    }
-                    ++ checked;
-                }
-            }
+            storage_.active_clean(ACTIVE_CLEAN_PER_LOOP);
         }
     }
 
@@ -217,31 +193,20 @@ public:
         if (command == "SET") {
             if (tokens.size() < 3)
                 return "error: missing args, must be SET [key] [value]\n";
-            storage_[tokens[1]] = {tokens[2], -1};
+            storage_.set(tokens[1], tokens[2]);
             return "OK\n";
         }
 
         if (command == "GET") {
             if (tokens.size() < 2)
                 return "error: missing args, must be GET [key]\n";
-            if (storage_.count(tokens[1])) {
-                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
-                            (std::chrono::steady_clock::now().time_since_epoch()).count();
-
-                if (storage_[tokens[1]].expires_at != -1 && storage_[tokens[1]].expires_at <= ms) {
-                    storage_.erase(tokens[1]);
-                    return "-1\n";
-                }
-                        
-                return storage_[tokens[1]].value + "\n";
-            }
-            return "-1\n";
+            return storage_.get(tokens[1]);
         }
 
         if (command == "DEL") {
             if (tokens.size() < 2)
                 return "error: missing args, must be DEL [key]\n";
-            if (storage_.erase(tokens[1]))
+            if (storage_.del(tokens[1]))
                 return "OK\n";
             return "error: key not found\n";
         }
@@ -249,18 +214,7 @@ public:
         if (command == "EXISTS") {
             if (tokens.size() < 2)
                 return "error: missing args, must be EXISTS [key]\n";
-            if (storage_.count(tokens[1])) {
-                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
-                            (std::chrono::steady_clock::now().time_since_epoch()).count();
-
-                if (storage_[tokens[1]].expires_at != -1 && storage_[tokens[1]].expires_at <= ms) {
-                    storage_.erase(tokens[1]);
-                    return "0\n";
-                }
-
-                return "1\n";
-            }
-            return "0\n";
+            return storage_.exists(tokens[1]) ? "1\n" : "0\n";
         }
 
         if (command == "HELP") {
@@ -270,20 +224,14 @@ public:
         if (command == "EXPIRES") {
             if (tokens.size() < 3)
                 return "error: missing args, must be EXPIRES [key] [ttl]\n";
-            if (storage_.count(tokens[1])) {
-                int32_t seconds;
-                try {
-                    seconds = stoi(tokens[2]);
-                } catch (const std::exception& err) {
-                    return "error: invalid ttl";
-                }
-
-                int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds> \
-                                (std::chrono::steady_clock::now().time_since_epoch()).count();
-                storage_[tokens[1]].expires_at = ms + seconds * 1000;
-                return "OK\n";
+            int32_t seconds;
+            try {
+                seconds = stoi(tokens[2]);
+            } catch (const std::exception& err) {
+                return "error: invalid ttl";
             }
-            
+            if (storage_.set_expires(tokens[1], seconds))
+                return "OK\n";
             return "error: key not found\n";
         }
 
