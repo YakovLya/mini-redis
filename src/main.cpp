@@ -33,7 +33,7 @@ private:
 
 public:
 
-    Server(int port) {
+    Server(int port, Storage db) : storage_(db) {
         server_fd = socket(AF_INET, SOCK_STREAM, 0);
         if (server_fd == -1) {
             throw std::runtime_error("socket init error");
@@ -245,8 +245,10 @@ public:
 };
 
 int main() {
+    Storage db;
+    
     try {
-        Server server(PORT);
+        Server server(PORT, db);
         server.run();
     } catch (const std::exception& err) {
         std::cerr << err.what() << '\n';
