@@ -188,7 +188,7 @@ public:
 
         if (command == "EXISTS") {
             if (tokens.size() < 2)
-                return "error: missing args, must be GET [key]\n";
+                return "error: missing args, must be EXISTS [key]\n";
             if (storage_.count(tokens[1]))
                 return "1\n";
             return "0\n";
