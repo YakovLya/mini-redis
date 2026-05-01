@@ -9,6 +9,7 @@ include_directories(src)
 set(SOURCES
     src/main.cpp
     src/storage/storage.cpp
+    src/commands/processor.cpp
 )
 
 add_executable(mredis ${SOURCES})

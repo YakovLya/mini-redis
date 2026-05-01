@@ -1,19 +1,14 @@
 #include "storage/storage.hpp"
+#include "commands/processor.hpp"
 
-#include <cctype>
 #include <chrono>
 #include <deque>
-#include <exception>
 #include <iostream>
 #include <netinet/in.h>
-#include <sstream>
-#include <stdexcept>
-#include <algorithm>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
-#include <vector>
 
 const int PORT = 4242;
 const int BUFFER_SIZE = 4096;
@@ -30,10 +25,11 @@ private:
     int server_fd = -1;
     int epoll_fd = -1;
     Storage storage_;
+    CommandProcessor processor_;
 
 public:
 
-    Server(int port, Storage db) : storage_(db) {
+    Server(int port, Storage db, CommandProcessor processor) : storage_(db), processor_(processor) {
         server_fd = socket(AF_INET, SOCK_STREAM, 0);
         if (server_fd == -1) {
             throw std::runtime_error("socket init error");
@@ -142,7 +138,7 @@ public:
 
                         client_buffer.erase(client_buffer.begin(), std::next(it));
 
-                        std::string response = process(query);
+                        std::string response = processor_.execute(query);
                         write(client_fd, response.c_str(), response.size());
                     } 
                 }
@@ -167,77 +163,6 @@ public:
         }
     }
 
-    std::string process(const std::string& raw_command) {
-        std::vector<std::string> tokens;
-        std::stringstream ss(raw_command);
-        std::string word;
-
-        if (ss >> word)
-            tokens.push_back(word);
-        else
-            return "error: no command provided\n";
-
-        if (ss >> word)
-            tokens.push_back(word);
-
-        std::string rest;
-        std::getline(ss, rest);
-
-        size_t start_pos = rest.find_first_not_of(" ");
-        if (start_pos != std::string::npos)
-            tokens.push_back(rest.substr(start_pos));
-        
-        std::string command = tokens[0];
-        std::transform(command.begin(), command.end(),command.begin(), toupper);
-
-        if (command == "SET") {
-            if (tokens.size() < 3)
-                return "error: missing args, must be SET [key] [value]\n";
-            storage_.set(tokens[1], tokens[2]);
-            return "OK\n";
-        }
-
-        if (command == "GET") {
-            if (tokens.size() < 2)
-                return "error: missing args, must be GET [key]\n";
-            return storage_.get(tokens[1]);
-        }
-
-        if (command == "DEL") {
-            if (tokens.size() < 2)
-                return "error: missing args, must be DEL [key]\n";
-            if (storage_.del(tokens[1]))
-                return "OK\n";
-            return "error: key not found\n";
-        }
-
-        if (command == "EXISTS") {
-            if (tokens.size() < 2)
-                return "error: missing args, must be EXISTS [key]\n";
-            return storage_.exists(tokens[1]) ? "1\n" : "0\n";
-        }
-
-        if (command == "HELP") {
-            return "Supported commands:\nHELP - return this message\nSET [key] [value...] - set value for key\nGET [key] - returns value for [key] if found, -1 otherwise\nDEL [key] - erase value for [key]\nEXISTS [key] - returns 1 if [key] exists, 0 otherwise\nEXPIRES [key] [ttl] - set value's ttl for [key] (in seconds)\n";
-        }
-
-        if (command == "EXPIRES") {
-            if (tokens.size() < 3)
-                return "error: missing args, must be EXPIRES [key] [ttl]\n";
-            int32_t seconds;
-            try {
-                seconds = stoi(tokens[2]);
-            } catch (const std::exception& err) {
-                return "error: invalid ttl";
-            }
-            if (storage_.set_expires(tokens[1], seconds))
-                return "OK\n";
-            return "error: key not found\n";
-        }
-
-        return "error: query must be one of SET, GET, DEL, HELP, EXISTS, EXPIRES\n";
-    }
-
     ~Server() {
         if (server_fd != -1)
             close(server_fd);
@@ -245,10 +170,10 @@ public:
 };
 
 int main() {
-    Storage db;
-    
     try {
-        Server server(PORT, db);
+        Storage db;
+        CommandProcessor processor(db);
+        Server server(PORT, db, processor);
         server.run();
     } catch (const std::exception& err) {
         std::cerr << err.what() << '\n';
