@@ -1,5 +1,6 @@
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <exception>
 #include <iostream>
@@ -24,11 +25,16 @@ struct ClientBuffer{
     std::chrono::steady_clock::time_point last_activity;
 };
 
+struct Value{
+    std::string value;
+    int64_t expires_at = -1;
+};
+
 class Server {
 private:
     int server_fd = -1;
     int epoll_fd = -1;
-    std::unordered_map<std::string, std::string> storage_;
+    std::unordered_map<std::string, Value> storage_;
 
 public:
 
@@ -190,15 +196,24 @@ public:
         if (command == "SET") {
             if (tokens.size() < 3)
                 return "error: missing args, must be SET [key] [value]\n";
-            storage_[tokens[1]] = tokens[2];
+            storage_[tokens[1]] = {tokens[2], -1};
             return "OK\n";
         }
 
         if (command == "GET") {
             if (tokens.size() < 2)
                 return "error: missing args, must be GET [key]\n";
-            if (storage_.count(tokens[1]))
-                return storage_[tokens[1]] + "\n";
+            if (storage_.count(tokens[1])) {
+                auto ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                            (std::chrono::steady_clock::now().time_since_epoch()).count();
+
+                if (storage_[tokens[1]].expires_at != -1 && storage_[tokens[1]].expires_at <= ms) {
+                    storage_.erase(tokens[1]);
+                    return "-1\n";
+                }
+                        
+                return storage_[tokens[1]].value + "\n";
+            }
             return "-1\n";
         }
 
@@ -207,19 +222,48 @@ public:
                 return "error: missing args, must be DEL [key]\n";
             if (storage_.erase(tokens[1]))
                 return "OK\n";
-            return "error: no such key\n";
+            return "error: key not found\n";
         }
 
         if (command == "EXISTS") {
             if (tokens.size() < 2)
                 return "error: missing args, must be EXISTS [key]\n";
-            if (storage_.count(tokens[1]))
+            if (storage_.count(tokens[1])) {
+                auto ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                            (std::chrono::steady_clock::now().time_since_epoch()).count();
+
+                if (storage_[tokens[1]].expires_at != -1 && storage_[tokens[1]].expires_at <= ms) {
+                    storage_.erase(tokens[1]);
+                    return "0\n";
+                }
+
                 return "1\n";
+            }
             return "0\n";
         }
 
         if (command == "HELP") {
             return "Supported commands:\nHELP - return this message\nSET [key] [value...] - set value for key\nGET [key] - returns value for [key] if found, -1 otherwise\nDEL [key] - erase value for [key]\nEXISTS [key] - returns 1 if [key] exists, 0 otherwise\n";
+        }
+
+        if (command == "EXPIRES") {
+            if (tokens.size() < 3)
+                return "error: missing args, must be EXPIRES [key] [ttl]\n";
+            if (storage_.count(tokens[1])) {
+                int32_t seconds;
+                try {
+                    seconds = stoi(tokens[2]);
+                } catch (const std::exception& err) {
+                    return "error: invalid ttl";
+                }
+
+                auto ms = std::chrono::duration_cast<std::chrono::milliseconds> \
+                                (std::chrono::steady_clock::now().time_since_epoch()).count();
+                storage_[tokens[1]].expires_at = ms + seconds * 1000;
+                return "OK\n";
+            }
+            
+            return "error: key not found\n";
         }
 
         return "error: query must be one of SET, GET, DEL, HELP, EXISTS\n";
