@@ -144,40 +144,61 @@ public:
         std::vector<std::string> tokens;
         std::stringstream ss(raw_command);
         std::string word;
-        while (ss >> word)
+
+        if (ss >> word)
+            tokens.push_back(word);
+        else
+            return "error: no command provided\n";
+
+        if (ss >> word)
             tokens.push_back(word);
 
-        if (tokens.empty())
-            return "error: no tokens\n";
+        std::string rest;
+        std::getline(ss, rest);
+
+        size_t start_pos = rest.find_first_not_of(" ");
+        if (start_pos != std::string::npos)
+            tokens.push_back(rest.substr(start_pos));
         
         std::string command = tokens[0];
         std::transform(command.begin(), command.end(),command.begin(), toupper);
 
         if (command == "SET") {
             if (tokens.size() < 3)
-                return "error: missing args, must be SET [key] [value]";
+                return "error: missing args, must be SET [key] [value]\n";
             storage_[tokens[1]] = tokens[2];
             return "OK\n";
         }
 
         if (command == "GET") {
             if (tokens.size() < 2)
-                return "error: missing args, must be GET [key]";
-            if (storage_.count(tokens[1])) {
+                return "error: missing args, must be GET [key]\n";
+            if (storage_.count(tokens[1]))
                 return storage_[tokens[1]] + "\n";
-            }
-            return "-1";
+            return "-1\n";
         }
 
         if (command == "DEL") {
             if (tokens.size() < 2)
-                return "error: missing args, must be DEL [key]";
+                return "error: missing args, must be DEL [key]\n";
             if (storage_.erase(tokens[1]))
-                return "OK";
-            return "error: no such key";
+                return "OK\n";
+            return "error: no such key\n";
         }
 
-        return "error: query must be one of SET, GET, DEL\n";
+        if (command == "EXISTS") {
+            if (tokens.size() < 2)
+                return "error: missing args, must be GET [key]\n";
+            if (storage_.count(tokens[1]))
+                return "1\n";
+            return "0\n";
+        }
+
+        if (command == "HELP") {
+            return "Supported commands:\nHELP - return this message\nSET [key] [value...] - set value for key\nGET [key] - returns value for [key] if found, -1 otherwise\nDEL [key] - erase value for [key]\nEXISTS [key] - returns 1 if [key] exists, 0 otherwise\n";
+        }
+
+        return "error: query must be one of SET, GET, DEL, HELP, EXISTS\n";
     }
 
     ~Server() {

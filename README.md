@@ -15,3 +15,4 @@ Supplied commands:
 - TTL
 - simple stuctures for `value`
 - tests
+- persistence
