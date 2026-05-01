@@ -1,4 +1,5 @@
 #include <cctype>
+#include <chrono>
 #include <deque>
 #include <exception>
 #include <iostream>
@@ -16,6 +17,12 @@
 
 const int PORT = 4242;
 const int BUFFER_SIZE = 4096;
+const int IDLE_CLIENT_TTL = 60; // TTL for idle client's (in seconds)
+
+struct ClientBuffer{
+    std::deque<char> buffer;
+    std::chrono::steady_clock::time_point last_activity;
+};
 
 class Server {
 private:
@@ -66,11 +73,11 @@ public:
     }
 
     void run() {
-        std::unordered_map<int, std::deque<char>> client_buffers;
+        std::unordered_map<int, ClientBuffer> client_buffers;
 
         while (true) {
             struct epoll_event events[64];
-            int n = epoll_wait(epoll_fd, events, 64, -1);
+            int n = epoll_wait(epoll_fd, events, 64, 1000);
 
             for (int i = 0; i < n; ++i) {
                 if (events[i].data.fd == server_fd) {
@@ -93,7 +100,8 @@ public:
                         std::cerr << "epoll add client error\n";
                     }
 
-                    client_buffers[client_fd].clear();
+                    client_buffers[client_fd].buffer.clear();
+                    client_buffers[client_fd].last_activity = std::chrono::steady_clock::now();
 
                     std::cout << "new client accepted! ( " << client_fd << " )\n";       
                 } else {
@@ -112,12 +120,13 @@ public:
                         continue;
                     }
 
-                    auto& client_buffer = client_buffers[client_fd];
+                    auto& client_buffer = client_buffers[client_fd].buffer;
                     client_buffer.insert(
                         client_buffer.end(), 
                         buffer,
                         buffer + bytes_read
                     );
+                    client_buffers[client_fd].last_activity = std::chrono::steady_clock::now();
 
                     while (true) {
                         auto it = std::find(client_buffer.begin(),client_buffer.end(), '\n');
@@ -135,6 +144,21 @@ public:
                         std::string response = process(query);
                         write(client_fd, response.c_str(), response.size());
                     } 
+                }
+            }
+
+            auto now = std::chrono::steady_clock::now();
+            for (auto it = client_buffers.begin(); it != client_buffers.end(); ) {
+                auto duration = std::chrono::duration_cast<std::chrono::seconds>
+                (now - it->second.last_activity).count();
+
+                if (duration > IDLE_CLIENT_TTL) {
+                    std::cout << "clean idle client's buffer ( " << it->first << " )\n";
+                    close(it->first);
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, it->first, nullptr);
+                    it = client_buffers.erase(it);
+                } else {
+                    ++ it;
                 }
             }
         }

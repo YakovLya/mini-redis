@@ -12,7 +12,7 @@ Supplied commands:
 
 ## WIP:
 - thread safety
-- TTL
+- TTL for values
 - simple stuctures for `value`
 - tests
 - persistence
