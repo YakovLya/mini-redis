@@ -1,7 +1,9 @@
+#include <cctype>
 #include <deque>
 #include <exception>
 #include <iostream>
 #include <netinet/in.h>
+#include <sstream>
 #include <stdexcept>
 #include <algorithm>
 #include <string>
@@ -10,6 +12,7 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <unordered_map>
+#include <vector>
 
 const int PORT = 4242;
 const int BUFFER_SIZE = 4096;
@@ -18,6 +21,7 @@ class Server {
 private:
     int server_fd = -1;
     int epoll_fd = -1;
+    std::unordered_map<std::string, std::string> storage_;
 
 public:
 
@@ -115,27 +119,65 @@ public:
                         buffer + bytes_read
                     );
 
-                    std::cout << "read from client ( " << client_fd << " )\n" << buffer; 
                     while (true) {
                         auto it = std::find(client_buffer.begin(),client_buffer.end(), '\n');
                         if (it == client_buffer.end()) {
                             break;
                         }
-                        std::string command(client_buffer.begin(), it);
+                        std::string query(client_buffer.begin(), it);
 
-                        if (!command.empty() && command.back() == '\r') {
-                            command.pop_back();
+                        if (!query.empty() && query.back() == '\r') {
+                            query.pop_back();
                         }
 
                         client_buffer.erase(client_buffer.begin(), std::next(it));
 
-                        std::cout << "got new command ( " << client_fd << " ): " << command << '\n';
+                        std::string response = process(query);
+                        write(client_fd, response.c_str(), response.size());
                     } 
-
-                    write(client_fd, "+OK\r\n", 5);
                 }
             }
         }
+    }
+
+    std::string process(const std::string& raw_command) {
+        std::vector<std::string> tokens;
+        std::stringstream ss(raw_command);
+        std::string word;
+        while (ss >> word)
+            tokens.push_back(word);
+
+        if (tokens.empty())
+            return "error: no tokens\n";
+        
+        std::string command = tokens[0];
+        std::transform(command.begin(), command.end(),command.begin(), toupper);
+
+        if (command == "SET") {
+            if (tokens.size() < 3)
+                return "error: missing args, must be SET [key] [value]";
+            storage_[tokens[1]] = tokens[2];
+            return "OK\n";
+        }
+
+        if (command == "GET") {
+            if (tokens.size() < 2)
+                return "error: missing args, must be GET [key]";
+            if (storage_.count(tokens[1])) {
+                return storage_[tokens[1]] + "\n";
+            }
+            return "-1";
+        }
+
+        if (command == "DEL") {
+            if (tokens.size() < 2)
+                return "error: missing args, must be DEL [key]";
+            if (storage_.erase(tokens[1]))
+                return "OK";
+            return "error: no such key";
+        }
+
+        return "error: query must be one of SET, GET, DEL\n";
     }
 
     ~Server() {
