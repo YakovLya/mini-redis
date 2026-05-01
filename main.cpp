@@ -1,11 +1,15 @@
+#include <deque>
 #include <exception>
 #include <iostream>
 #include <netinet/in.h>
 #include <stdexcept>
+#include <algorithm>
+#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
+#include <unordered_map>
 
 const int PORT = 4242;
 const int BUFFER_SIZE = 4096;
@@ -58,6 +62,8 @@ public:
     }
 
     void run() {
+        std::unordered_map<int, std::deque<char>> client_buffers;
+
         while (true) {
             struct epoll_event events[64];
             int n = epoll_wait(epoll_fd, events, 64, -1);
@@ -80,8 +86,10 @@ public:
                     event.events = EPOLLIN;
                     event.data.fd = client_fd;
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) < 0) {
-                        std::cerr<<"epoll add client error\n";
+                        std::cerr << "epoll add client error\n";
                     }
+
+                    client_buffers[client_fd].clear();
 
                     std::cout << "new client accepted! ( " << client_fd << " )\n";       
                 } else {
@@ -100,8 +108,29 @@ public:
                         continue;
                     }
 
-                    std::cout << "read from client ( " << client_fd << " )\n";
-                    std::cout << buffer << '\n'; 
+                    auto& client_buffer = client_buffers[client_fd];
+                    client_buffer.insert(
+                        client_buffer.end(), 
+                        buffer,
+                        buffer + bytes_read
+                    );
+
+                    std::cout << "read from client ( " << client_fd << " )\n" << buffer; 
+                    while (true) {
+                        auto it = std::find(client_buffer.begin(),client_buffer.end(), '\n');
+                        if (it == client_buffer.end()) {
+                            break;
+                        }
+                        std::string command(client_buffer.begin(), it);
+
+                        if (!command.empty() && command.back() == '\r') {
+                            command.pop_back();
+                        }
+
+                        client_buffer.erase(client_buffer.begin(), std::next(it));
+
+                        std::cout << "got new command ( " << client_fd << " ): " << command << '\n';
+                    } 
 
                     write(client_fd, "+OK\r\n", 5);
                 }
