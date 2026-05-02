@@ -4,6 +4,7 @@
 #include "utils/logger.hpp"
 
 #include <fcntl.h>
+#include <mutex>
 #include <netinet/in.h>
 #include <stdexcept>
 #include <sys/epoll.h>
@@ -31,8 +32,12 @@ bool Server::new_connection() {
         return false;
     }
 
-    client_buffers_[client_fd].buffer.clear();
-    client_buffers_[client_fd].last_activity = std::chrono::steady_clock::now();
+    {
+        std::lock_guard lock(mutex_);
+
+        client_buffers_[client_fd].buffer.clear();
+        client_buffers_[client_fd].last_activity = std::chrono::steady_clock::now();
+    }
 
     Logger::log(LogLevel::INFO, "new client accepted, fd = " + std::to_string(client_fd));
     return true;     
@@ -53,6 +58,7 @@ bool Server::new_bytes(int client_fd) {
         return false;
     }
 
+    std::lock_guard lock(mutex_);
     auto& client_buffer = client_buffers_[client_fd].buffer;
     client_buffer.insert(
         client_buffer.end(), 
@@ -73,23 +79,30 @@ bool Server::new_bytes(int client_fd) {
         }
 
         client_buffer.erase(client_buffer.begin(), std::next(it));
+        ++client_buffers_[client_fd].active_tasks;
 
         pool_.add_task([this, client_fd, query]() {
             std::string response = processor_.execute(query);
             write(client_fd, response.c_str(), response.size());
+
+            std::lock_guard lock(mutex_);
+            if(client_buffers_.contains(client_fd))
+                --client_buffers_[client_fd].active_tasks;
         });
     } 
+
 
     return true;
 }
 
 void Server::clean_idle_clients() {
     auto now = std::chrono::steady_clock::now();
+    std::lock_guard lock(mutex_);
     for (auto it = client_buffers_.begin(); it != client_buffers_.end(); ) {
         auto duration = std::chrono::floor<std::chrono::seconds> \
         (now - it->second.last_activity).count();
 
-        if (duration > config::IDLE_CLIENT_TTL) {
+        if (duration > config::IDLE_CLIENT_TTL && it->second.active_tasks == 0) {
             Logger::log(LogLevel::INFO, "clean idle client's buffer, fd = " + std::to_string(it->first));
             close(it->first);
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, it->first, nullptr);

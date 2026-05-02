@@ -5,10 +5,12 @@
 #include "thread_pool/thread_pool.hpp"
 #include <chrono>
 #include <deque>
+#include <mutex>
 
-struct ClientBuffer{
+struct ClientData{
     std::deque<char> buffer;
     std::chrono::steady_clock::time_point last_activity;
+    std::atomic<int> active_tasks{0};
 };
 
 class Server{
@@ -17,8 +19,9 @@ private:
     int epoll_fd = -1;
     Storage& storage_;
     CommandProcessor& processor_;
-    std::unordered_map<int, ClientBuffer> client_buffers_;
+    std::unordered_map<int, ClientData> client_buffers_;
     ThreadPool pool_;
+    std::mutex mutex_;
 
     bool new_connection();
     bool new_bytes(int client_fd);
