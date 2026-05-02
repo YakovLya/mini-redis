@@ -3,5 +3,6 @@ build/
 .vscode/
 *.code-workspace
 .history/
+__pycache__/
 
 docker-compose.override.yml
