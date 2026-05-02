@@ -8,6 +8,7 @@ include_directories(src)
 
 set(SOURCES
     src/main.cpp
+    src/server/server.cpp
     src/storage/storage.cpp
     src/commands/processor.cpp
 )
