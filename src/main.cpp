@@ -8,7 +8,7 @@ int main() {
     try {
         Storage db;
         CommandProcessor processor(db);
-        Server server(config::PORT, db, processor);
+        Server server(config::PORT, db, processor, config::THREADS_NUM);
         server.run();
     } catch (const std::exception& err) {
         Logger::log(LogLevel::ERR, "init error: " + std::string(err.what()));

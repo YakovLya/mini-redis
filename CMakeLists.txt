@@ -26,6 +26,7 @@ set(SOURCES
     src/server/server.cpp
     src/storage/storage.cpp
     src/commands/processor.cpp
+    src/thread_pool/thread_pool.cpp
 )
 
 add_executable(mredis ${SOURCES})

@@ -2,6 +2,7 @@
 
 namespace config {
     const int PORT = 4242;
+    const int THREADS_NUM = 8;
 
     const int EPOLL_TIMEOUT = 100;
     const int BUFFER_SIZE = 4096;
