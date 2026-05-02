@@ -1,23 +1,67 @@
-# mini-redis
-C++ in-memory data storage
+## mini-redis
 
-## info:
+High-performance, in-memory key-value store using asynchronous I/O and multi-threaded request processing
 
-- default port: `4242`
+---
 
+### Features
+*   **Event-driven Architecture**: Utilizes `epoll` for efficient handling of thousands of concurrent connections
+*   **Thread Pool**: Custom thread pool implementation to minimize thread creation overhead
+*   **TTL & Passive Expiry**: Keys support time-to-live with removal triggered upon access
 
-Supplied commands:
-- `SET [key] [value]`
-- `GET [key]`
-- `DEL [key]`
-- `EXISTS [key]`
-- `EXPIRES [key] [ttl]`
+---
 
-note: commands can be wrote in `aNY caSe`
+### 🏗 Build & Run
 
-## WIP:
-- thread safety
-- simple stuctures for `value`
-- tests
-- persistence
-- readme.md
+#### Prerequisites
+*   Linux (required for `epoll`)
+*   C++20 compatible compiler (GCC/Clang)
+*   CMake 3.10+
+
+#### Compilation
+```bash
+# Debug mode
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make
+
+# Release mode
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make
+```
+
+#### Running the Server
+```bash
+./mredis  # Default port: 4242
+```
+
+---
+
+### ⌨️ Supported Commands
+
+| Command | Description |
+| :--- | :--- |
+| `SET key value` | Stores a value |
+| `GET key` | Retrieves value; returns `$-1` if expired or not found |
+| `DEL key` | Deletes a key |
+| `EXISTS key` | Checks key existence (returns `:1` or `:0`) |
+| `EXPIRES key ttl` | Sets TTL in seconds |
+
+---
+
+### Testing
+Functional and stress tests are implemented using Python's `unittest`
+
+```bash
+python3 tests/test_server.py
+```
+
+---
+
+### Roadmap
+- [x] **Active Expiry**: Background cleanup of expired keys
+- [x] **Multithreading**: Safe memory access via RW-lock
+- [x] **Thread Pool**: Optimized task scheduling
+- [ ] **Persistence (AOF)**: Command logging for data recovery
+- [ ] **Complex Types**: Support for Lists and Hashes
+- [ ] **RESP Protocol**: Full Redis Serialization Protocol compatibility
