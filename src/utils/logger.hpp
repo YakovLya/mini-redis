@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <chrono>
+#include <format>
 
 enum class LogLevel { INFO, WARN, ERR, DEBUG };
 
@@ -20,8 +21,7 @@ private:
 
 public:
     static void log(LogLevel level, const std::string& str) {
-        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        std::cout << "[" << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") << "] "
-                  << loglevel(level) << ": " << str << std::endl;
+        auto now  = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+        std::cout << std::format("[{:%T}] [{}] {}\n", now, loglevel(level), str);
     }
 };

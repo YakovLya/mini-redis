@@ -1,13 +1,15 @@
 #include "storage.hpp"
 #include "config.hpp"
+#include <string>
+#include <utils/logger.hpp>
+
 #include <chrono>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 
 int64_t Storage::get_current_time_ms() const {
-    return std::chrono::duration_cast<std::chrono::milliseconds> \
-            (std::chrono::steady_clock::now().time_since_epoch()).count();
+    return std::chrono::floor<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 bool Storage::is_expired(const Value& value, int64_t now) {
@@ -73,6 +75,7 @@ void Storage::active_clean(int32_t max_clean_per_loop) {
         
         while (cleanup_it != storage_.end() && checked < max_clean_per_loop) {
             if (cleanup_it->second.expires_at != -1 && cleanup_it->second.expires_at <= ms) {
+                Logger::log(LogLevel::INFO, "clean expired key " + cleanup_it->first);
                 cleanup_it = storage_.erase(cleanup_it);
             } else {
                 ++ cleanup_it;

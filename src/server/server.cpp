@@ -86,7 +86,7 @@ bool Server::new_bytes(int client_fd) {
 void Server::clean_idle_clients() {
     auto now = std::chrono::steady_clock::now();
     for (auto it = client_buffers_.begin(); it != client_buffers_.end(); ) {
-        auto duration = std::chrono::duration_cast<std::chrono::seconds>
+        auto duration = std::chrono::floor<std::chrono::seconds> \
         (now - it->second.last_activity).count();
 
         if (duration > config::IDLE_CLIENT_TTL) {
