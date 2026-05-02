@@ -1,4 +1,5 @@
 #include "storage.hpp"
+#include "config.hpp"
 #include <chrono>
 
 int64_t Storage::get_current_time_ms() const {
@@ -12,6 +13,8 @@ bool Storage::is_expired(const Value& value, int64_t now) {
 
 void Storage::set(const std::string& key, const std::string& value) {
     storage_[key] = {value, -1};
+    if (config::DEFAULT_VALUE_TTL != -1)
+        set_expires(key, config::DEFAULT_VALUE_TTL);
     cleanup_it = storage_.begin();
 }
 

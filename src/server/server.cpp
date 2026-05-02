@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "config.hpp"
 
 #include <iostream>
 #include <fcntl.h>
@@ -6,10 +7,6 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-const int BUFFER_SIZE = 4096;
-const int IDLE_CLIENT_TTL = 60; // TTL for idle client's (in seconds)
-const int ACTIVE_CLEAN_PER_LOOP = 20; // How many values tries to clean each timeout
 
 bool Server::new_connection() {
     sockaddr_in client_addr{};
@@ -40,8 +37,8 @@ bool Server::new_connection() {
 }
 
 bool Server::new_bytes(int client_fd) {
-    char buffer[BUFFER_SIZE];
-    ssize_t bytes_read = read(client_fd, &buffer, BUFFER_SIZE);
+    char buffer[config::BUFFER_SIZE];
+    ssize_t bytes_read = read(client_fd, &buffer, sizeof(buffer));
     if (bytes_read == 0) {
         std::cout << "client closed connection ( " << client_fd << " )\n";
         close(client_fd);
@@ -88,7 +85,7 @@ void Server::clean_idle_clients() {
         auto duration = std::chrono::duration_cast<std::chrono::seconds>
         (now - it->second.last_activity).count();
 
-        if (duration > IDLE_CLIENT_TTL) {
+        if (duration > config::IDLE_CLIENT_TTL) {
             std::cout << "clean idle client's buffer ( " << it->first << " )\n";
             close(it->first);
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, it->first, nullptr);
@@ -142,7 +139,7 @@ Server::Server(int port, Storage db, CommandProcessor processor) : storage_(db),
 void Server::run() {
     while (true) {
         struct epoll_event events[64];
-        int n = epoll_wait(epoll_fd, events, 64, 100);
+        int n = epoll_wait(epoll_fd, events, 64, config::EPOLL_TIMEOUT);
 
         for (int i = 0; i < n; ++i) {
             if (events[i].data.fd == server_fd) {
@@ -153,7 +150,7 @@ void Server::run() {
         }
 
         clean_idle_clients();
-        storage_.active_clean(ACTIVE_CLEAN_PER_LOOP);
+        storage_.active_clean(config::ACTIVE_CLEAN_PER_LOOP);
     }
 }
 
