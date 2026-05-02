@@ -1,6 +1,7 @@
 #include "storage.hpp"
 #include "config.hpp"
 #include <chrono>
+#include <optional>
 
 int64_t Storage::get_current_time_ms() const {
     return std::chrono::duration_cast<std::chrono::milliseconds> \
@@ -18,17 +19,17 @@ void Storage::set(const std::string& key, const std::string& value) {
     cleanup_it = storage_.begin();
 }
 
-std::string Storage::get(const std::string& key) {
+std::optional<std::string> Storage::get(const std::string& key) {
     if (storage_.count(key)) {
         int64_t ms = get_current_time_ms();
         if (is_expired(storage_[key], ms)) {
             storage_.erase(key);
-            return "-1\n";
+            return std::nullopt;
         }
                 
-        return storage_[key].value + "\n";
+        return storage_[key].value;
     }
-    return "-1\n";
+    return std::nullopt;
 }
 
 bool Storage::del(const std::string& key) {

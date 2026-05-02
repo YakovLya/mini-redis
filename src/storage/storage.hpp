@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <unordered_map>
 #include <string>
 #include <cstdint>
@@ -21,7 +22,7 @@ public:
     Storage() = default;
 
     void set(const std::string& key, const std::string& value);
-    std::string get(const std::string& key);
+    std::optional<std::string>get(const std::string& key);
     bool del(const std::string& key);
     bool exists(const std::string& key);
     bool set_expires(const std::string& key, const int32_t seconds);
