@@ -14,8 +14,8 @@ class Server{
 private:
     int server_fd = -1;
     int epoll_fd = -1;
-    Storage storage_;
-    CommandProcessor processor_;
+    Storage& storage_;
+    CommandProcessor& processor_;
     std::unordered_map<int, ClientBuffer> client_buffers_;
 
     bool new_connection();
@@ -23,7 +23,7 @@ private:
     void clean_idle_clients();
     
 public:
-    explicit Server(int port, Storage db, CommandProcessor processor);
+    explicit Server(int port, Storage& db, CommandProcessor& processor);
     void run();
     ~Server();
 };

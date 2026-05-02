@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 
 bool Server::new_connection() {
@@ -73,8 +74,10 @@ bool Server::new_bytes(int client_fd) {
 
         client_buffer.erase(client_buffer.begin(), std::next(it));
 
-        std::string response = processor_.execute(query);
-        write(client_fd, response.c_str(), response.size());
+        std::thread([this, client_fd, query]() {
+            std::string response = processor_.execute(query);
+            write(client_fd, response.c_str(), response.size());
+        }).detach();
     } 
 
     return true;
@@ -97,7 +100,7 @@ void Server::clean_idle_clients() {
     }
 }
 
-Server::Server(int port, Storage db, CommandProcessor processor) : storage_(db), processor_(processor) {
+Server::Server(int port, Storage& db, CommandProcessor& processor) : storage_(db), processor_(processor) {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
         throw std::runtime_error("socket init error");

@@ -1,6 +1,7 @@
 import socket
 import time
 import unittest
+import threading
 
 class TestRedisServer(unittest.TestCase):
     def setUp(self):
@@ -65,6 +66,40 @@ class TestRedisServer(unittest.TestCase):
             
             s2.sendall(b"GET multi\n")
             self.assertEqual(s2.recv(1024).decode(), "+key1\r\n")
+
+    def test_stress_deadlock_passive_expiry(self):
+        num_threads = 16
+        ops_per_thread = 100
+        errors = []
+
+        def worker():
+            try:
+                thread_id = threading.get_ident()
+                key = f"stress_key_{thread_id}"
+                
+                for i in range(ops_per_thread):
+                    self.send_query(f"SET {key} val_{i}")
+                    self.send_query(f"EXPIRES {key} 0")
+                    
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.settimeout(2.0)
+                        s.connect((self.host, self.port))
+                        s.sendall(f"GET {key}\n".encode())
+                        
+                        resp = s.recv(1024).decode()
+                        if not resp:
+                            errors.append(f"Thread {thread_id}: Empty response (possible deadlock)")
+            except socket.timeout:
+                errors.append(f"Thread {thread_id}: Connection timed out (DEADLOCK!)")
+            except Exception as e:
+                errors.append(f"Thread {thread_id}: Exception {e}")
+
+        threads = [threading.Thread(target=worker) for _ in range(num_threads)]
+        
+        for t in threads: t.start()
+        for t in threads: t.join()
+
+        self.assertEqual(len(errors), 0, f"Deadlock test failed with errors: {errors}")
 
 if __name__ == "__main__":
     unittest.main()

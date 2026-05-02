@@ -6,7 +6,7 @@
 
 class CommandProcessor{
 private:
-    Storage storage_;
+    Storage& storage_;
 
     std::vector<std::string> get_tokens(const std::string& query);
     std::string to_upper(std::string str);

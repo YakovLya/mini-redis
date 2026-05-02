@@ -1,7 +1,9 @@
 #include "storage.hpp"
 #include "config.hpp"
 #include <chrono>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 
 int64_t Storage::get_current_time_ms() const {
     return std::chrono::duration_cast<std::chrono::milliseconds> \
@@ -13,43 +15,46 @@ bool Storage::is_expired(const Value& value, int64_t now) {
 }
 
 void Storage::set(const std::string& key, const std::string& value) {
+    std::unique_lock lock(rw_mutex_);
     storage_[key] = {value, -1};
     if (config::DEFAULT_VALUE_TTL != -1)
         set_expires(key, config::DEFAULT_VALUE_TTL);
     cleanup_it = storage_.begin();
 }
 
-std::optional<std::string> Storage::get(const std::string& key) {
-    if (storage_.count(key)) {
-        int64_t ms = get_current_time_ms();
-        if (is_expired(storage_[key], ms)) {
-            storage_.erase(key);
-            return std::nullopt;
-        }
-                
-        return storage_[key].value;
+std::optional<std::string> Storage::get(const std::string& key) { 
+    {
+        std::shared_lock lock(rw_mutex_);
+        if (storage_.count(key)) {
+            int64_t ms = get_current_time_ms();
+            if (!is_expired(storage_[key], ms)) return storage_[key].value;
+        } else return std::nullopt;
     }
+
+    del(key);
     return std::nullopt;
 }
 
 bool Storage::del(const std::string& key) {
+    std::unique_lock lock(rw_mutex_);
     return storage_.erase(key) > 0;
 }
 
 bool Storage::exists(const std::string& key) {
-    if (storage_.count(key)) {
-        int64_t ms = get_current_time_ms();
-        if (is_expired(storage_[key], ms)) {
-            storage_.erase(key);
-            return false;
-        }
-
-        return true;
+    {
+        std::shared_lock lock(rw_mutex_);
+        if (storage_.count(key)) {
+            int64_t ms = get_current_time_ms();
+            if (!is_expired(storage_[key], ms)) return true;
+        } else return false;
     }
+
+    del(key);
     return false;
 }
 
 bool Storage::set_expires(const std::string& key, const int32_t seconds) {
+    std::unique_lock lock(rw_mutex_);
     if (storage_.count(key)) {
         storage_[key].expires_at = get_current_time_ms() + static_cast<int64_t>(seconds) * 1000;
         return true;
@@ -58,6 +63,7 @@ bool Storage::set_expires(const std::string& key, const int32_t seconds) {
 }
 
 void Storage::active_clean(int32_t max_clean_per_loop) {
+    std::unique_lock lock(rw_mutex_);
     if (!storage_.empty()) {
         int checked = 0;
         int64_t ms = get_current_time_ms();

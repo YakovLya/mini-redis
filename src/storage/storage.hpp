@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <shared_mutex>
 #include <unordered_map>
 #include <string>
 #include <cstdint>
@@ -17,6 +18,7 @@ private:
 
     int64_t get_current_time_ms() const;
     bool is_expired(const Value& value, int64_t now);
+    mutable std::shared_mutex rw_mutex_;
 
 public:
     Storage() = default;
