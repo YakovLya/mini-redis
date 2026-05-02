@@ -1,19 +1,20 @@
 #include "thread_pool.hpp"
 #include <functional>
 #include <mutex>
+#include <stop_token>
 
 
-ThreadPool::ThreadPool(std::size_t threads) : is_stop_(false) {
+ThreadPool::ThreadPool(std::size_t threads) {
     for (size_t i = 0; i < threads; ++i){
-        workers_.emplace_back([this] {
+        workers_.emplace_back([this] (std::stop_token stop) {
             while(true) {
                 std::function<void()> task;
                 {
                     std::unique_lock<std::mutex> lock(tasks_mutex_);
-                    condition_.wait(lock, [this] {
-                        return is_stop_ || !tasks_.empty();
+                    condition_.wait(lock, [this, &stop] {
+                        return stop.stop_requested() || !tasks_.empty();
                     });
-                    if (is_stop_ && tasks_.empty()) return;
+                    if (stop.stop_requested() && tasks_.empty()) return;
                     task = std::move(tasks_.front());
                     tasks_.pop();
                 }
@@ -29,14 +30,4 @@ void ThreadPool::add_task(std::function<void()> task) {
         tasks_.emplace(std::move(task));
     }
     condition_.notify_one();
-}
-
-ThreadPool::~ThreadPool() {
-    {
-        std::unique_lock<std::mutex> lock(tasks_mutex_);
-        is_stop_ = true;
-    }
-    condition_.notify_all();
-    for(std::thread& worker : workers_)
-        worker.join();
 }
