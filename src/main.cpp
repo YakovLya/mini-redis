@@ -2,8 +2,7 @@
 #include "storage/storage.hpp"
 #include "commands/processor.hpp"
 #include "config.hpp"
-
-#include <iostream>
+#include "utils/logger.hpp"
 
 int main() {
     try {
@@ -12,7 +11,7 @@ int main() {
         Server server(config::PORT, db, processor);
         server.run();
     } catch (const std::exception& err) {
-        std::cerr << err.what() << '\n';
+        Logger::log(LogLevel::ERR, "init error: " + std::string(err.what()));
     }
     return 0;
 }

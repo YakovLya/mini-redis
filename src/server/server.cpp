@@ -1,9 +1,10 @@
 #include "server.hpp"
 #include "config.hpp"
+#include "utils/logger.hpp"
 
-#include <iostream>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <stdexcept>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -14,7 +15,7 @@ bool Server::new_connection() {
 
     int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &addr_len);
     if (client_fd < 0) {
-        std::cerr << "new client accept error\n";
+        Logger::log(LogLevel::ERR, "new client accept error");
         return false;
     }
 
@@ -25,14 +26,14 @@ bool Server::new_connection() {
     event.events = EPOLLIN;
     event.data.fd = client_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) < 0) {
-        std::cerr << "epoll add client error\n";
+        Logger::log(LogLevel::ERR, "epoll add client error");
         return false;
     }
 
     client_buffers_[client_fd].buffer.clear();
     client_buffers_[client_fd].last_activity = std::chrono::steady_clock::now();
 
-    std::cout << "new client accepted! ( " << client_fd << " )\n";
+    Logger::log(LogLevel::INFO, "new client accepted, fd = " + std::to_string(client_fd));
     return true;     
 }
 
@@ -40,13 +41,13 @@ bool Server::new_bytes(int client_fd) {
     char buffer[config::BUFFER_SIZE];
     ssize_t bytes_read = read(client_fd, &buffer, sizeof(buffer));
     if (bytes_read == 0) {
-        std::cout << "client closed connection ( " << client_fd << " )\n";
+        Logger::log(LogLevel::INFO, "client closed connection, fd = " + std::to_string(client_fd));
         close(client_fd);
         return false;
     }
 
     if (bytes_read < 0) {
-        std::cout << "connection shuttered ( " << client_fd << " )\n";
+        Logger::log(LogLevel::INFO, "connection shuttered, fd = " + std::to_string(client_fd));
         close(client_fd);
         return false;
     }
@@ -86,7 +87,7 @@ void Server::clean_idle_clients() {
         (now - it->second.last_activity).count();
 
         if (duration > config::IDLE_CLIENT_TTL) {
-            std::cout << "clean idle client's buffer ( " << it->first << " )\n";
+            Logger::log(LogLevel::INFO, "clean idle client's buffer, fd = " + std::to_string(it->first));
             close(it->first);
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, it->first, nullptr);
             it = client_buffers_.erase(it);
@@ -133,7 +134,7 @@ Server::Server(int port, Storage db, CommandProcessor processor) : storage_(db),
         throw std::runtime_error("epoll add server error");
     }
 
-    std::cout << "server listening on the port: " << port << '\n';
+    Logger::log(LogLevel::INFO, "server listening on the port: " + std::to_string(port));
 }
 
 void Server::run() {
