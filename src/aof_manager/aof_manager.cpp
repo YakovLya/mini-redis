@@ -1,4 +1,5 @@
 #include "aof_manager.hpp"
+#include "commands/processor.hpp"
 
 #include <filesystem>
 #include <fstream>

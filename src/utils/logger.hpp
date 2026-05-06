@@ -9,7 +9,7 @@ enum class LogLevel { INFO, WARN, ERR, DEBUG };
 
 class Logger {
 private:
-    static std::string loglevel(LogLevel level) {
+    static std::string_view loglevel(LogLevel level) {
         switch (level) {
             case LogLevel::INFO:  return "\033[32mINFO\033[0m";
             case LogLevel::WARN:  return "\033[33mWARN\033[0m";

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "commands/processor.hpp"
 #include <fstream>
 #include <mutex>
 #include <string>

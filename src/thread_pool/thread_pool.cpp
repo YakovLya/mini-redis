@@ -11,10 +11,8 @@ ThreadPool::ThreadPool(std::size_t threads) {
                 std::function<void()> task;
                 {
                     std::unique_lock<std::mutex> lock(tasks_mutex_);
-                    condition_.wait(lock, [this, &stop] {
-                        return stop.stop_requested() || !tasks_.empty();
-                    });
-                    if (stop.stop_requested() && tasks_.empty()) return;
+                    if (!condition_.wait(lock, stop, [this] { return !tasks_.empty(); }))
+                        return;
                     task = std::move(tasks_.front());
                     tasks_.pop();
                 }

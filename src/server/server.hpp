@@ -13,7 +13,7 @@ extern volatile std::sig_atomic_t shutdown_requested;
 
 struct ClientData{
     std::deque<char> buffer;
-    std::chrono::steady_clock::time_point last_activity;
+    std::chrono::system_clock::time_point last_activity;
     std::atomic<int> active_tasks{0};
 };
 

@@ -3,6 +3,7 @@
 #include "thread_pool/thread_pool.hpp"
 #include "utils/logger.hpp"
 
+#include <chrono>
 #include <fcntl.h>
 #include <mutex>
 #include <netinet/in.h>
@@ -36,7 +37,7 @@ bool Server::new_connection() {
         std::lock_guard lock(mutex_);
 
         client_buffers_[client_fd].buffer.clear();
-        client_buffers_[client_fd].last_activity = std::chrono::steady_clock::now();
+        client_buffers_[client_fd].last_activity = std::chrono::system_clock::now();
     }
 
     Logger::log(LogLevel::INFO, "new client accepted, fd = " + std::to_string(client_fd));
@@ -65,10 +66,10 @@ bool Server::new_bytes(int client_fd) {
         buffer,
         buffer + bytes_read
     );
-    client_buffers_[client_fd].last_activity = std::chrono::steady_clock::now();
+    client_buffers_[client_fd].last_activity = std::chrono::system_clock::now();
 
     while (true) {
-        auto it = std::find(client_buffer.begin(),client_buffer.end(), '\n');
+        auto it = std::ranges::find(client_buffer, '\n');
         if (it == client_buffer.end()) {
             break;
         }
@@ -96,7 +97,7 @@ bool Server::new_bytes(int client_fd) {
 }
 
 void Server::clean_idle_clients() {
-    auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::system_clock::now();
     std::lock_guard lock(mutex_);
     for (auto it = client_buffers_.begin(); it != client_buffers_.end(); ) {
         auto duration = std::chrono::floor<std::chrono::seconds> \
@@ -105,7 +106,6 @@ void Server::clean_idle_clients() {
         if (duration > config::IDLE_CLIENT_TTL && it->second.active_tasks == 0) {
             Logger::log(LogLevel::INFO, "clean idle client's buffer, fd = " + std::to_string(it->first));
             close(it->first);
-            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, it->first, nullptr);
             it = client_buffers_.erase(it);
         } else {
             ++ it;

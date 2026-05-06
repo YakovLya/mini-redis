@@ -11,7 +11,7 @@ private:
     std::vector<std::jthread> workers_;
     std::queue<std::function<void()>> tasks_;
     std::mutex tasks_mutex_;
-    std::condition_variable condition_;
+    std::condition_variable_any condition_;
 
 public:
 

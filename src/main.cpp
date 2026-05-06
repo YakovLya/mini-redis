@@ -23,6 +23,7 @@ int main() {
 
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
+        std::signal(SIGPIPE, SIG_IGN);
 
         server.run();
     } catch (const std::exception& err) {

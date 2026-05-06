@@ -45,11 +45,6 @@ std::vector<std::string_view> CommandProcessor::get_tokens(std::string_view quer
     return tokens;
 }
 
-std::string CommandProcessor::to_upper(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), toupper);
-    return str;
-}
-
 std::string CommandProcessor::execute(std::string_view query) {
     std::vector<std::string_view> tokens = get_tokens(query);
     if (tokens.empty()) return "-ERR no command provided\n";

@@ -13,7 +13,6 @@ private:
     bool save_aof_ = false;
 
     std::vector<std::string_view> get_tokens(std::string_view query);
-    std::string to_upper(std::string str);
 
 public:
     explicit CommandProcessor(Storage& storage);

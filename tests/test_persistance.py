@@ -38,6 +38,15 @@ class TestRedisPersistence(unittest.TestCase):
                 self.server_proc.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
                 os.killpg(os.getpgid(self.server_proc.pid), signal.SIGKILL)
+
+            if self.server_proc.stdout:
+                self.server_proc.stdout.close()
+            if self.server_proc.stderr:
+                self.server_proc.stderr.close()
+            if self.server_proc.stdin:
+                self.server_proc.stdin.close()
+            self.server_proc.wait()
+
             self.server_proc = None
 
     def send_query(self, query):
