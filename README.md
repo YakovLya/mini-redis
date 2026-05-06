@@ -5,9 +5,10 @@ High-performance, in-memory key-value store using asynchronous I/O and multi-thr
 ---
 
 ### Features
-*   **Event-driven Architecture**: Utilizes `epoll` for efficient handling of thousands of concurrent connections
-*   **Thread Pool**: Custom thread pool implementation to minimize thread creation overhead
-*   **TTL & Passive Expiry**: Keys support time-to-live with removal triggered upon access
+* **Event-driven Architecture**: Utilizes `epoll` for efficient handling of thousands of concurrent connections
+* **Thread Pool**: Custom thread pool implementation to minimize thread creation overhead
+* **TTL & Expiry**: Keys support time-to-live with both active (background cleanup) and passive (on-access) eviction
+* **AOF Persistence**: Crash-resilient logging of mutating commands using absolute timestamp tracking to eliminate TTL drift upon server recovery
 
 ---
 
@@ -46,6 +47,7 @@ make
 | `DEL key` | Deletes a key |
 | `EXISTS key` | Checks key existence (returns `:1` or `:0`) |
 | `EXPIRES key ttl` | Sets TTL in seconds |
+| `EXPIREAT key timestamp_ms` | Sets TTL using absolute Unix timestamp in milliseconds (internal, used for AOF recovery) |
 
 ---
 
@@ -53,7 +55,12 @@ make
 Functional and stress tests are implemented using Python's `unittest`
 
 ```bash
+# functional & stress tests (requires running server)
 python3 tests/test_server.py
+
+
+# persistence & crash-recovery tests (runs server itself)
+python3 tests/test_persistance.py
 ```
 
 ---
@@ -62,6 +69,6 @@ python3 tests/test_server.py
 - [x] **Active Expiry**: Background cleanup of expired keys
 - [x] **Multithreading**: Safe memory access via RW-lock
 - [x] **Thread Pool**: Optimized task scheduling
-- [ ] **Persistence (AOF)**: Command logging for data recovery
+- [x] **Persistence (AOF)**: Command logging for data recovery
 - [ ] **Complex Types**: Support for Lists and Hashes
 - [ ] **RESP Protocol**: Full Redis Serialization Protocol compatibility
