@@ -27,6 +27,7 @@ set(SOURCES
     src/storage/storage.cpp
     src/commands/processor.cpp
     src/thread_pool/thread_pool.cpp
+    src/aof_manager/aof_manager.cpp
 )
 
 add_executable(mredis ${SOURCES})

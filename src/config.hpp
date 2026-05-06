@@ -1,8 +1,11 @@
 #pragma once
 
+#include <string>
+
 namespace config {
     const int PORT = 4242;
     const int THREADS_NUM = 8;
+    const std::string SAVEFILE_NAME = "aof_save";
 
     const int EPOLL_TIMEOUT = 100;
     const int BUFFER_SIZE = 4096;

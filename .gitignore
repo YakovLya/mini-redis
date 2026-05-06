@@ -1,4 +1,5 @@
 build/
+aof_save
 
 .vscode/
 *.code-workspace

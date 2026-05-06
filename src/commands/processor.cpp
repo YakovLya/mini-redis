@@ -1,11 +1,19 @@
 #include "processor.hpp"
+#include "utils/logger.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <optional>
 #include <string_view>
 
-CommandProcessor::CommandProcessor(Storage& storage) : storage_(storage) {}
+CommandProcessor::CommandProcessor(Storage& storage) : storage_(storage), aof_manager_(nullptr), save_aof_(false) {}
+CommandProcessor::CommandProcessor(Storage& storage, AofManager* aof_manager) 
+                    : storage_(storage), aof_manager_(aof_manager), save_aof_(false) {
+                        Logger::log(LogLevel::INFO, "start recover from AOF file");
+                        aof_manager_->load(this);
+                        Logger::log(LogLevel::INFO, "end recover from AOF file");
+                        save_aof_ = true;
+                    }
 
 std::vector<std::string_view> CommandProcessor::get_tokens(std::string_view query) {
     std::vector<std::string_view> tokens;
@@ -53,6 +61,7 @@ std::string CommandProcessor::execute(std::string_view query) {
     if (is_cmd(tokens[0], "SET")) {
         if (tokens.size() < 3) return "-ERR missing args, must be SET [key] [value]\r\n";
         storage_.set(std::string(tokens[1]), std::string(tokens[2]));
+        if (save_aof_) aof_manager_->save(query);
         return "+OK\r\n";
     }
 
@@ -64,7 +73,10 @@ std::string CommandProcessor::execute(std::string_view query) {
 
     if (is_cmd(tokens[0], "DEL")) {
         if (tokens.size() < 2) return "-ERR missing args, must be DEL [key]\r\n";
-        if (storage_.del(std::string(tokens[1]))) return "+OK\r\n";
+        if (storage_.del(std::string(tokens[1]))) { 
+            if (save_aof_) aof_manager_->save(query);
+            return "+OK\r\n";
+        }
         return "-ERR key not found\r\n";
     }
 
@@ -81,7 +93,10 @@ std::string CommandProcessor::execute(std::string_view query) {
         if (tokens.size() < 3) return "-ERR missing args, must be EXPIRES [key] [ttl]\r\n";
         try {
             int32_t seconds = stoi(std::string(tokens[2]));
-            if (storage_.set_expires(std::string(tokens[1]), seconds)) return "+OK\r\n";
+            if (storage_.set_expires(std::string(tokens[1]), seconds)) {
+                if (save_aof_) aof_manager_->save(query);
+                return "+OK\r\n";
+            }
         } catch (...) {
             return "-ERR invalid ttl\r\n";
         }

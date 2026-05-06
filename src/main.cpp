@@ -1,3 +1,4 @@
+#include "aof_manager/aof_manager.hpp"
 #include "server/server.hpp"
 #include "storage/storage.hpp"
 #include "commands/processor.hpp"
@@ -7,7 +8,8 @@
 int main() {
     try {
         Storage db;
-        CommandProcessor processor(db);
+        AofManager aof_manager(config::SAVEFILE_NAME);
+        CommandProcessor processor(db, &aof_manager);
         Server server(config::PORT, db, processor, config::THREADS_NUM);
         server.run();
     } catch (const std::exception& err) {
