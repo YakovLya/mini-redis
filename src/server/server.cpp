@@ -155,7 +155,7 @@ Server::Server(int port, Storage& db, CommandProcessor& processor,
 }
 
 void Server::run() {
-    while (true) {
+    while (running_ && !shutdown_requested) {
         struct epoll_event events[64];
         int n = epoll_wait(epoll_fd, events, 64, config::EPOLL_TIMEOUT);
 
@@ -170,6 +170,12 @@ void Server::run() {
         clean_idle_clients();
         storage_.active_clean(config::ACTIVE_CLEAN_PER_LOOP);
     }
+
+    Logger::log(LogLevel::INFO, "Server stopped gracefully. Cleaning up resources...");
+}
+
+void Server::stop() {
+    running_ = false;
 }
 
 Server::~Server() {

@@ -31,3 +31,10 @@ void ThreadPool::add_task(std::function<void()> task) {
     }
     condition_.notify_one();
 }
+
+ThreadPool::~ThreadPool() {
+    for (auto& worker : workers_)
+        worker.request_stop();
+    condition_.notify_all();
+    workers_.clear();
+}

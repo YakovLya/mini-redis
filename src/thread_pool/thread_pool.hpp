@@ -17,4 +17,5 @@ public:
 
     ThreadPool(size_t threads);
     void add_task(std::function<void()> task);
+    ~ThreadPool();
 };
