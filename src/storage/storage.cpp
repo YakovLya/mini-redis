@@ -16,11 +16,15 @@ bool Storage::is_expired(const Value& value, int64_t now) {
     return (value.expires_at != -1 && value.expires_at <= now);
 }
 
+void Storage::set_expires_internal(const std::string& key, const int64_t timestamp) {
+    if (storage_.count(key)) storage_[key].expires_at = timestamp;
+}
+
 void Storage::set(const std::string& key, const std::string& value) {
     std::unique_lock lock(rw_mutex_);
     storage_[key] = {value, -1};
     if (config::DEFAULT_VALUE_TTL != -1)
-        set_expires(key, config::DEFAULT_VALUE_TTL);
+        set_expires_internal(key, get_current_time_ms() + static_cast<int64_t>(config::DEFAULT_VALUE_TTL) * 1000);
     cleanup_it = storage_.begin();
 }
 
@@ -58,7 +62,16 @@ bool Storage::exists(const std::string& key) {
 bool Storage::set_expires(const std::string& key, const int32_t seconds) {
     std::unique_lock lock(rw_mutex_);
     if (storage_.count(key)) {
-        storage_[key].expires_at = get_current_time_ms() + static_cast<int64_t>(seconds) * 1000;
+        set_expires_internal(key, get_current_time_ms() + static_cast<int64_t>(seconds) * 1000);
+        return true;
+    }
+    return false;
+}
+
+bool Storage::set_expiresat(const std::string& key, const int64_t timestamp) {
+    std::unique_lock lock(rw_mutex_);
+    if (storage_.count(key)) {
+        set_expires_internal(key, timestamp);
         return true;
     }
     return false;

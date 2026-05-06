@@ -1,8 +1,10 @@
 #include "processor.hpp"
+#include "config.hpp"
 #include "utils/logger.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -61,7 +63,13 @@ std::string CommandProcessor::execute(std::string_view query) {
     if (is_cmd(tokens[0], "SET")) {
         if (tokens.size() < 3) return "-ERR missing args, must be SET [key] [value]\r\n";
         storage_.set(std::string(tokens[1]), std::string(tokens[2]));
-        if (save_aof_) aof_manager_->save(query);
+        if (save_aof_) {
+            aof_manager_->save(query);
+            if (config::DEFAULT_VALUE_TTL != -1) {
+                int64_t expires_at = storage_.get_current_time_ms() + static_cast<int64_t>(config::DEFAULT_VALUE_TTL) * 1000;
+                aof_manager_->save(std::format("EXPIRESAT {} {}", tokens[1], expires_at));
+            }
+        }
         return "+OK\r\n";
     }
 
@@ -94,6 +102,23 @@ std::string CommandProcessor::execute(std::string_view query) {
         try {
             int32_t seconds = stoi(std::string(tokens[2]));
             if (storage_.set_expires(std::string(tokens[1]), seconds)) {
+                if (save_aof_) {
+                    int64_t expires_at = storage_.get_current_time_ms() + static_cast<int64_t>(seconds) * 1000;
+                    aof_manager_->save(std::format("EXPIRESAT {} {}", tokens[1], expires_at));
+                }
+                return "+OK\r\n";
+            }
+        } catch (...) {
+            return "-ERR invalid ttl\r\n";
+        }
+        return "-ERR key not found\r\n";
+    }
+
+    if (is_cmd(tokens[0], "EXPIRESAT")) {
+        if (tokens.size() < 3) return "-ERR missing args, must be EXPIRES [key] [ttl]\r\n";
+        try {
+            int64_t timestamp = stoll(std::string(tokens[2]));
+            if (storage_.set_expiresat(std::string(tokens[1]), timestamp)) {
                 if (save_aof_) aof_manager_->save(query);
                 return "+OK\r\n";
             }
